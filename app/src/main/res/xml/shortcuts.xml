@@ -8,8 +8,8 @@
         android:shortcutShortLabel="@string/shortcut_shorthand">
         <intent
             android:action="android.intent.action.VIEW"
-            android:data="shorthand"
+            android:data="shorthand://open"
             android:targetClass="org.b3log.siyuan.ShortcutActivity"
-            android:targetPackage="org.b3log.siyuan" />
+            android:targetPackage="note.zjc.kim" />
     </shortcut>
 </shortcuts>
