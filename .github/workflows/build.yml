@@ -24,6 +24,11 @@ jobs:
       - name: 检出源码
         uses: actions/checkout@v4
 
+      - name: 移除阿里云镜像源（强制海外服务器直连官方 Maven 源加速）
+        run: |
+          sed -i '/maven\.aliyun\.com/d' build.gradle || true
+          echo "强制直连官方源就绪！"
+
       - name: 配置 JDK 17
         uses: actions/setup-java@v4
         with:
@@ -45,30 +50,16 @@ jobs:
 
       - name: 配置应用名称(金成笔记)与应用包名(note.zjc.kim)
         run: |
-          echo "1. 替换所有 values 语言包中的名称为「金成笔记」..."
+          echo "1. 统一替换所有多语言资源中的 app_name 为「金成笔记」..."
           find app/src/main/res/ -name "strings.xml" -exec sed -i -E 's/<string name="app_name">.*<\/string>/<string name="app_name">金成笔记<\/string>/g' {} +
           find app/src/main/res/ -name "strings.xml" -exec sed -i -E 's/<string name="app_package_name">.*<\/string>/<string name="app_package_name">note.zjc.kim<\/string>/g' {} +
 
-          echo "2. 修改 app/build.gradle 中的 applicationId..."
+          echo "2. 修改 app/build.gradle 中的 applicationId 为 note.zjc.kim..."
           sed -i -E 's/applicationId\s*=?\s*"org.b3log.siyuan"/applicationId "note.zjc.kim"/g' app/build.gradle || true
           sed -i -E 's/applicationId\s*=?\s*"\$\{applicationId\}"/applicationId "note.zjc.kim"/g' app/build.gradle || true
 
-          echo "3. 精准清理主 AndroidManifest.xml..."
-          sed -i 's/<manifest[^>]*package="[^"]*"/<manifest/g' app/src/main/AndroidManifest.xml || true
-          sed -i 's/android:label="@string\/app_name"/android:label="金成笔记"/g' app/src/main/AndroidManifest.xml || true
-          sed -i 's/org.b3log.siyuan.shorthand/note.zjc.kim.shorthand/g' app/src/main/AndroidManifest.xml || true
-
-          if ! grep -q 'android:testOnly' app/src/main/AndroidManifest.xml; then
-            sed -i 's/<application/<application android:testOnly="false"/g' app/src/main/AndroidManifest.xml
-          fi
-
-          if ! grep -q "SYSTEM_ALERT_WINDOW" app/src/main/AndroidManifest.xml; then
-            sed -i '/<application/i \    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />' app/src/main/AndroidManifest.xml
-          fi
-
-          echo "4. 同步 shortcuts.xml 快捷方式目标包名..."
-          find app/src/main/res/ -name "shortcuts*.xml" -exec sed -i 's/targetPackage="org.b3log.siyuan"/targetPackage="note.zjc.kim"/g' {} + || true
-          find app/src/main/res/ -name "shortcuts*.xml" -exec sed -i 's/org.b3log.siyuan/note.zjc.kim/g' {} + || true
+          echo "3. 精准同步 shortcuts.xml 中的目标包名(保留类名不被破坏)..."
+          find app/src/main/res/ -name "shortcuts*.xml" -exec sed -i 's/targetPackage="[^"]*"/targetPackage="note.zjc.kim"/g' {} + || true
 
       - name: 写入应用版本号到根目录 build.gradle
         run: |
@@ -82,7 +73,7 @@ jobs:
           sed -i "s/siyuanVersionName = .*/siyuanVersionName = \"$VER_NAME\"/g" ./build.gradle
           sed -i "s/siyuanVersionCode = .*/siyuanVersionCode = $VER_CODE/g" ./build.gradle
 
-      - name: 构建国内版 kernel.aar (依据官方版本下载并提取 arm64-v8a)
+      - name: 构建国内版 kernel.aar (依据官方版本提取 arm64-v8a)
         run: |
           RAW_INPUT="${{ github.event.inputs.siyuan_version }}"
           PURE_VER="${RAW_INPUT#v}"
@@ -142,9 +133,8 @@ jobs:
           echo "-keep class mobile.** { *; }" >> app/proguard-rules.pro
           echo "-ignorewarnings" >> app/proguard-rules.pro
 
-      - name: 现场生成永久一致签名证书并双目录部署
+      - name: 现生证书并双目录部署 (免上传文件，防找不到证书)
         run: |
-          # 1. 现场生成证书
           keytool -genkeypair -v \
             -keystore "zjc_note.jks" \
             -alias jincheng \
@@ -155,18 +145,16 @@ jobs:
             -keypass 123456 \
             -dname "CN=note.zjc.kim, OU=JinCheng, O=JinCheng, L=City, ST=State, C=CN"
 
-          # 2. 根目录与 app 目录各存一份，防止 Gradle 校验定位不到
           mkdir -p app
           cp -f zjc_note.jks app/zjc_note.jks
 
-          # 3. 写入 signings.gradle
           echo 'android { signingConfigs { siyuanConfig { storeFile file("zjc_note.jks"); storePassword "123456"; keyAlias "jincheng"; keyPassword "123456"; v1SigningEnabled true; v2SigningEnabled true; } } }' > signings.gradle
-          echo "签名证书配置就绪！"
+          echo "签名证书现场生成就绪！"
 
       - name: 赋予 Gradle 执行权限
         run: chmod +x gradlew
 
-      - name: 执行正式版极速打包 (免clean + 单架构 + 跳过无用Lint)
+      - name: 执行正式版极速打包 (单架构免clean)
         run: ./gradlew assembleCnRelease -Pandroid.injected.build.abi=arm64-v8a -x lint -x lintVitalCnRelease --parallel --stacktrace
 
       - name: 筛选并重命名正式 APK 产物
