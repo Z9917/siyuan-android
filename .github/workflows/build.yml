@@ -8,11 +8,11 @@ on:
         required: true
         default: '3.8.8'
       app_version_name:
-        description: '2. 对外展示版本号 (例如 3.8.9)'
+        description: '2. 金成笔记对外展示版本号 (例如 3.8.9)'
         required: true
         default: '3.8.9'
       app_version_code:
-        description: '3. 内部 VersionCode (整数 例如 30809)'
+        description: '3. 金成笔记内部 VersionCode (整数 例如 30809)'
         required: true
         default: '30809'
 
@@ -43,18 +43,21 @@ jobs:
           fi
           cd -
 
-      - name: 配置包名 (note.zjc.kim) 与多语言应用名称
+      - name: 配置包名 (zjc.kim.note) 与应用名称锁定为「金成笔记」
         run: |
-          echo "1. 强制将所有语言包中的 app_name 替换为「金成软件」..."
-          find app/src/main/res/ -name "strings.xml" -exec sed -i -E 's/<string name="app_name">.*<\/string>/<string name="app_name">金成软件<\/string>/g' {} +
-          find app/src/main/res/ -name "strings.xml" -exec sed -i -E 's/<string name="app_package_name">.*<\/string>/<string name="app_package_name">note.zjc.kim<\/string>/g' {} +
+          echo "1. 强制将所有语言包中的 app_name 替换为「金成笔记」..."
+          find app/src/main/res/ -name "strings.xml" -exec sed -i -E 's/<string name="app_name"[^>]*>.*<\/string>/<string name="app_name">金成笔记<\/string>/g' {} +
+          find app/src/main/res/ -name "strings.xml" -exec sed -i -E 's/<string name="app_package_name"[^>]*>.*<\/string>/<string name="app_package_name">zjc.kim.note<\/string>/g' {} +
 
-          echo "2. 修改 app/build.gradle 中的 applicationId..."
-          sed -i -E 's/applicationId\s*=?\s*"org.b3log.siyuan"/applicationId "note.zjc.kim"/g' app/build.gradle || true
-          sed -i -E 's/applicationId\s*=?\s*"\$\{applicationId\}"/applicationId "note.zjc.kim"/g' app/build.gradle || true
+          echo "2. 清单文件双保险：直接将主入口 label 锁定为「金成笔记」..."
+          sed -i 's/android:label="@string\/app_name"/android:label="金成笔记"/g' app/src/main/AndroidManifest.xml || true
 
-          echo "3. 确保 shortcuts.xml 里的 targetPackage 对齐 note.zjc.kim..."
-          find app/src/main/res/ -name "shortcuts*.xml" -exec sed -i 's/targetPackage="org.b3log.siyuan"/targetPackage="note.zjc.kim"/g' {} + || true
+          echo "3. 修改 app/build.gradle 中的 applicationId..."
+          sed -i -E 's/applicationId\s*=?\s*"org.b3log.siyuan"/applicationId "zjc.kim.note"/g' app/build.gradle || true
+          sed -i -E 's/applicationId\s*=?\s*"\$\{applicationId\}"/applicationId "zjc.kim.note"/g' app/build.gradle || true
+
+          echo "4. 确保 shortcuts.xml 里的 targetPackage 对齐 zjc.kim.note..."
+          find app/src/main/res/ -name "shortcuts*.xml" -exec sed -i 's/targetPackage="org.b3log.siyuan"/targetPackage="zjc.kim.note"/g' {} + || true
 
       - name: 写入应用版本号到根目录 build.gradle
         run: |
@@ -62,8 +65,8 @@ jobs:
           VER_NAME="${RAW_NAME#v}"
           VER_CODE="${{ github.event.inputs.app_version_code }}"
 
-          echo "设置展示版本号: $VER_NAME"
-          echo "设置内部 VersionCode: $VER_CODE"
+          echo "设置金成笔记展示版本号: $VER_NAME"
+          echo "设置金成笔记内部 VersionCode: $VER_CODE"
 
           sed -i "s/siyuanVersionName = .*/siyuanVersionName = \"$VER_NAME\"/g" ./build.gradle
           sed -i "s/siyuanVersionCode = .*/siyuanVersionCode = $VER_CODE/g" ./build.gradle
@@ -92,7 +95,7 @@ jobs:
             unzip -q dex-tools.zip
             chmod +x dex-tools-v2.4/*.sh
             ./dex-tools-v2.4/d2j-dex2jar.sh -f official.apk -o official-classes.jar || true
-
+            
             mkdir -p aar_classes
             for jarfile in *dex2jar.jar official-classes.jar; do
               if [ -f "$jarfile" ]; then
@@ -155,10 +158,10 @@ jobs:
           VER_NAME="${RAW_NAME#v}"
           mkdir -p release_apk
           echo "正在查找正式 release apk..."
-          find app/build/outputs/apk/cn/release/ -type f -name "*.apk" -exec cp -v {} release_apk/JinCheng-App-${VER_NAME}.apk \; || true
+          find app/build/outputs/apk/cn/release/ -type f -name "*.apk" -exec cp -v {} release_apk/JinCheng-Note-${VER_NAME}.apk \; || true
 
           if [ ! -f release_apk/*.apk ]; then
-            find app/build/ -type f -name "*cn*release*.apk" ! -name "*unsigned*" -exec cp -v {} release_apk/JinCheng-App-${VER_NAME}.apk \;
+            find app/build/ -type f -name "*cn*release*.apk" ! -name "*unsigned*" -exec cp -v {} release_apk/JinCheng-Note-${VER_NAME}.apk \;
           fi
 
           ls -lh release_apk/
@@ -166,5 +169,5 @@ jobs:
       - name: 上传打包好的 APK 产物
         uses: actions/upload-artifact@v4
         with:
-          name: JinCheng-App-${{ github.event.inputs.app_version_name }}
+          name: JinCheng-Note-${{ github.event.inputs.app_version_name }}
           path: release_apk/*.apk
