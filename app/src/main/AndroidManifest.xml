@@ -83,12 +83,12 @@
             android:theme="@style/Theme.SiYuan"
             android:windowSoftInputMode="adjustResize" />
 
-        <!-- 闪念速记：使用完整的底层全类名，外部可拉起且不依赖相对包名 -->
+        <!-- 闪念速记：全类名绑定，保证换包名后系统依然能正确实例化该类 -->
         <activity
             android:name="org.b3log.siyuan.ShortcutActivity"
             android:exported="true"
-            android:label="@string/shortcut_shorthand"
             android:launchMode="singleTask"
+            android:taskAffinity="note.zjc.kim.shorthand"
             android:theme="@style/Theme.AppCompat.DayNight.NoActionBar"
             android:windowSoftInputMode="adjustResize">
             <intent-filter>
@@ -105,12 +105,6 @@
             </intent-filter>
         </activity>
 
-        <activity
-            android:name=".SettingsActivity"
-            android:exported="false"
-            android:label="@string/title_activity_settings"
-            android:theme="@style/Theme.SiYuan.Settings" />
-
         <service
             android:name=".KeepLiveService"
             android:enabled="true"
@@ -121,16 +115,6 @@
             android:name=".KernelService"
             android:enabled="true"
             android:exported="false" />
-
-        <provider
-            android:name="androidx.core.content.FileProvider"
-            android:authorities="${applicationId}.fileprovider"
-            android:exported="false"
-            android:grantUriPermissions="true">
-            <meta-data
-                android:name="android.support.FILE_PROVIDER_PATHS"
-                android:resource="@xml/file_paths" />
-        </provider>
     </application>
 
 </manifest>
