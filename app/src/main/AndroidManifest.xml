@@ -47,10 +47,9 @@
 
     <application
         android:name=".App"
-        android:testOnly="false"
         android:enableOnBackInvokedCallback="true"
         android:icon="@mipmap/ic_launcher"
-        android:label="金成笔记"
+        android:label="@string/app_name"
         android:localeConfig="@xml/locales_config"
         android:networkSecurityConfig="@xml/network_security_config"
         android:supportsRtl="true"
@@ -60,7 +59,6 @@
 
         <activity
             android:name=".BootActivity"
-            android:label="金成笔记"
             android:autoRemoveFromRecents="true"
             android:configChanges="orientation|screenSize"
             android:exported="true"
@@ -89,8 +87,8 @@
         <activity
             android:name=".ShortcutActivity"
             android:exported="true"
+            android:label="@string/shortcut_shorthand"
             android:launchMode="singleTask"
-            android:taskAffinity="org.b3log.siyuan.shorthand"
             android:theme="@style/Theme.AppCompat.DayNight.NoActionBar"
             android:windowSoftInputMode="adjustResize">
             <intent-filter>
@@ -120,3 +118,188 @@
     </application>
 
 </manifest>
+```[cite: 1]
+
+点击页面底部的 **Commit changes** 提交保存[cite: 1]。
+
+---
+
+#### 第二步：更新 `.github/workflows/build.yml`（彻底移除污染清单的 sed 命令）
+
+在 GitHub 打开 `.github/workflows/build.yml`[cite: 1]，**Ctrl + A 全选清空**，粘贴以下配置[cite: 3]：
+* 应用名称通过修改所有 `strings.xml` 里的 `app_name` 改为 **「金成笔记」**（最稳妥合规，绝不会损坏清单 XML 结构）[cite: 1, 3]；
+* 彻底删除对 `AndroidManifest.xml` 的盲目 `sed` 操作，防止属性重复注入[cite: 1]；
+* 保留证书动态生成与双目录就位、极速无缓存清理构建[cite: 1, 2]。
+
+```yaml
+name: Build JinCheng Note APK
+
+on:
+  workflow_dispatch:
+    inputs:
+      siyuan_version:
+        description: '1. 思源官方下载版本号 (例如 3.8.8)'
+        required: true
+        default: '3.8.8'
+      app_version_name:
+        description: '2. 金成笔记对外展示版本号 (例如 3.8.9)'
+        required: true
+        default: '3.8.9'
+      app_version_code:
+        description: '3. 金成笔记内部 VersionCode (整数 例如 30809)'
+        required: true
+        default: '30809'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 检出源码
+        uses: actions/checkout@v4
+
+      - name: 移除阿里云镜像源（强制海外服务器直连官方 Maven 源加速）
+        run: |
+          sed -i '/maven\.aliyun\.com/d' build.gradle || true
+          echo "强制直连官方源就绪！"
+
+      - name: 配置 JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+          cache: 'gradle'
+
+      - name: 合并还原 app.zip 并清理分卷切片
+        run: |
+          cd app/src/main/assets
+          if ls app.zip.part* 1> /dev/null 2>&1; then
+            echo "正在拼接 app.zip..."
+            cat app.zip.part* > app.zip
+            echo "删除分卷切片，防止重复打包导致体积膨胀..."
+            rm -f app.zip.part*
+            ls -lh app.zip
+          fi
+          cd -
+
+      - name: 修改应用名称为「金成笔记」
+        run: |
+          echo "替换所有语言包中的 app_name 为「金成笔记」..."
+          find app/src/main/res/ -name "strings.xml" -exec sed -i -E 's/<string name="app_name">.*<\/string>/<string name="app_name">金成笔记<\/string>/g' {} +
+
+      - name: 写入应用版本号到根目录 build.gradle
+        run: |
+          RAW_NAME="${{ github.event.inputs.app_version_name }}"
+          VER_NAME="${RAW_NAME#v}"
+          VER_CODE="${{ github.event.inputs.app_version_code }}"
+
+          echo "设置金成笔记展示版本号: $VER_NAME"
+          echo "设置金成笔记内部 VersionCode: $VER_CODE"
+
+          sed -i "s/siyuanVersionName = .*/siyuanVersionName = \"$VER_NAME\"/g" ./build.gradle
+          sed -i "s/siyuanVersionCode = .*/siyuanVersionCode = $VER_CODE/g" ./build.gradle
+
+      - name: 构建国内版 kernel.aar (依据官方版本下载并提取 arm64-v8a)
+        run: |
+          RAW_INPUT="${{ github.event.inputs.siyuan_version }}"
+          PURE_VER="${RAW_INPUT#v}"
+          TAG="v${PURE_VER}"
+
+          echo "正在下载官方 APK: siyuan-${PURE_VER}.apk (Release Tag: ${TAG})"
+          APK_URL="https://github.com/siyuan-note/siyuan/releases/download/${TAG}/siyuan-${PURE_VER}.apk"
+          curl -fL -o official.apk "$APK_URL"
+
+          mkdir -p extracted_apk
+          unzip -o official.apk "lib/*" -d extracted_apk || true
+
+          if [ -d "extracted_apk/lib/arm64-v8a" ]; then
+            echo "1. 提取 arm64-v8a 动态库..."
+            mkdir -p aar_build/jni/arm64-v8a
+            cp -r extracted_apk/lib/arm64-v8a/* aar_build/jni/arm64-v8a/
+            find aar_build/jni -name "*onnxruntime*.so" -delete
+
+            echo "2. 提取 GoMobile 桥接类..."
+            curl -L -o dex-tools.zip https://github.com/pxb1988/dex2jar/releases/download/v2.4/dex-tools-v2.4.zip
+            unzip -q dex-tools.zip
+            chmod +x dex-tools-v2.4/*.sh
+            ./dex-tools-v2.4/d2j-dex2jar.sh -f official.apk -o official-classes.jar || true
+
+            mkdir -p aar_classes
+            for jarfile in *dex2jar.jar official-classes.jar; do
+              if [ -f "$jarfile" ]; then
+                unzip -qo "$jarfile" "mobile/*" "go/*" -d aar_classes || true
+              fi
+            done
+
+            echo "3. 打包 classes.jar..."
+            jar cvf aar_build/classes.jar -C aar_classes .
+
+            echo "4. 生成符合 AAR 规范的标准清单..."
+            echo '<?xml version="1.0" encoding="utf-8"?><manifest xmlns:android="http://schemas.android.com/apk/res/android" package="org.b3log.siyuan.kernel"></manifest>' > aar_build/AndroidManifest.xml
+
+            echo "5. 封装为纯 arm64-v8a 的 kernel.aar..."
+            mkdir -p app/libs
+            cd aar_build
+            zip -r ../app/libs/kernel.aar AndroidManifest.xml classes.jar jni
+            cd ..
+            echo "kernel.aar 制作完成！"
+          else
+            echo "错误：未能从官方 APK 中提取出 lib/arm64-v8a 目录"
+            exit 1
+          fi
+
+      - name: 配置 ProGuard 忽略混淆告警
+        run: |
+          mkdir -p app
+          cat <<EOF >> app/proguard-rules.pro
+          -dontwarn go.**
+          -dontwarn mobile.**
+          -dontwarn m60
+          -dontwarn x8
+          -keep class go.** { *; }
+          -keep class mobile.** { *; }
+          -ignorewarnings
+          EOF
+
+      - name: 现场生成标准 Android 官方格式签名证书并双目录存放
+        run: |
+          keytool -genkeypair -v \
+            -keystore "zjc_note.jks" \
+            -alias jincheng \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 36500 \
+            -storepass 123456 \
+            -keypass 123456 \
+            -dname "CN=org.b3log.siyuan, OU=JinCheng, O=JinCheng, L=City, ST=State, C=CN"
+
+          mkdir -p app
+          cp -f zjc_note.jks app/zjc_note.jks
+
+          echo 'android { signingConfigs { siyuanConfig { storeFile file("zjc_note.jks"); storePassword "123456"; keyAlias "jincheng"; keyPassword "123456"; v1SigningEnabled true; v2SigningEnabled true; } } }' > signings.gradle
+          echo "签名证书配置就绪！"
+
+      - name: 赋予 Gradle 执行权限
+        run: chmod +x gradlew
+
+      - name: 执行正式版打包任务 (正式 Release，绝无 testOnly 污染)
+        run: ./gradlew assembleCnRelease -x lint -x lintVitalCnRelease --parallel --stacktrace
+
+      - name: 筛选并重命名正式 APK 产物
+        run: |
+          RAW_NAME="${{ github.event.inputs.app_version_name }}"
+          VER_NAME="${RAW_NAME#v}"
+          mkdir -p release_apk
+          find app/build/outputs/apk/cn/release/ -type f -name "*.apk" -exec cp -v {} release_apk/JinCheng-Note-${VER_NAME}.apk \; || true
+
+          if [ ! -f release_apk/*.apk ]; then
+            find app/build/ -type f -name "*cn*release*.apk" ! -name "*unsigned*" -exec cp -v {} release_apk/JinCheng-Note-${VER_NAME}.apk \;
+          fi
+
+          ls -lh release_apk/
+
+      - name: 上传打包好的 APK 产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: JinCheng-Note-${{ github.event.inputs.app_version_name }}
+          path: release_apk/*.apk
