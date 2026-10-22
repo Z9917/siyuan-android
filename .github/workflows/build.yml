@@ -48,30 +48,28 @@ jobs:
           fi
           cd -
 
-      - name: 强制注入应用包名 (note.zjc.kim) 与应用名称 (金成软件)
+      - name: 彻底击穿替换 flavors.gradle、清单与多语言(包名锁定 note.zjc.kim)
         run: |
-          echo "1. 替换所有 values 语言包中的名称为「金成软件」，包名变量为 note.zjc.kim..."
-          find app/src/main/res/ -name "strings.xml" -exec sed -i -E 's/<string name="app_name">.*<\/string>/<string name="app_name">金成软件<\/string>/g' {} +
-          find app/src/main/res/ -name "strings.xml" -exec sed -i -E 's/<string name="app_package_name">.*<\/string>/<string name="app_package_name">note.zjc.kim<\/string>/g' {} +
+          echo "1. 彻底替换 flavors.gradle 中的渠道专属包名（核心根源修复）..."
+          find . -name "flavors.gradle" -exec sed -i -E 's/applicationId\s+["'"'"'][^"'"'"']+["'"'"']/applicationId "note.zjc.kim"/g' {} + || true
 
-          echo "2. 强制在 app/build.gradle 中注入 applicationId..."
+          echo "2. 修改 app/build.gradle 中的 applicationId 与 package..."
           if grep -q "applicationId" app/build.gradle; then
             sed -i -E 's/applicationId\s+["'"'"'][^"'"'"']+["'"'"']/applicationId "note.zjc.kim"/g' app/build.gradle
           else
-            # 若 defaultConfig 内无声明，直接插入新行
             sed -i '/defaultConfig\s*{/a \        applicationId "note.zjc.kim"' app/build.gradle
           fi
 
-          # 同步多渠道配置中可能包含的 applicationId
-          if [ -f "flavors.gradle" ]; then
-            sed -i -E 's/applicationId\s+["'"'"'][^"'"'"']+["'"'"']/applicationId "note.zjc.kim"/g' flavors.gradle || true
-          fi
+          echo "3. 替换全局所有 values 语言包中的应用名称与包名字符串..."
+          find app/src/main/res/ -name "strings.xml" -exec sed -i -E 's/<string name="app_name">.*<\/string>/<string name="app_name">金成软件<\/string>/g' {} +
+          find app/src/main/res/ -name "strings.xml" -exec sed -i -E 's/<string name="app_package_name">.*<\/string>/<string name="app_package_name">note.zjc.kim<\/string>/g' {} +
 
-          echo "=== 检查 app/build.gradle 中的 applicationId 配置 ==="
-          grep -C 2 "applicationId" app/build.gradle
-
-          echo "3. 精准同步 shortcuts.xml 中的目标包名..."
+          echo "4. 同步 shortcuts.xml 快捷方式目标包名为 note.zjc.kim..."
           find app/src/main/res/ -name "shortcuts*.xml" -exec sed -i 's/targetPackage="[^"]*"/targetPackage="note.zjc.kim"/g' {} + || true
+          find app/src/main/res/ -name "shortcuts*.xml" -exec sed -i 's/org.b3log.siyuan/note.zjc.kim/g' {} + || true
+
+          echo "=== 检查 flavors.gradle 替换后的包名配置 ==="
+          cat flavors.gradle | grep -C 2 "applicationId" || true
 
       - name: 写入应用版本号到根目录 build.gradle
         run: |
@@ -171,7 +169,7 @@ jobs:
       - name: 执行正式版打包任务 (正式 Release)
         run: ./gradlew assembleCnRelease -x lint -x lintVitalCnRelease --parallel --stacktrace
 
-      - name: 筛选并验证最终 APK 包名
+      - name: 筛选并现场打印检验 APK 真实包名与版本
         run: |
           RAW_NAME="${{ github.event.inputs.app_version_name }}"
           VER_NAME="${RAW_NAME#v}"
@@ -184,11 +182,12 @@ jobs:
 
           ls -lh release_apk/
 
-          echo "=== 正在使用 aapt 严格检查最终 APK 的真实包名 ==="
+          echo "==================== AAPT 包名严格核验 ===================="
           AAPT_BIN=$(find /usr/local/lib/android/sdk/build-tools/ -name aapt | sort -V | tail -n 1)
           if [ -n "$AAPT_BIN" ]; then
-            $AAPT_BIN dump badging release_apk/*.apk | grep "package: name="
+            $AAPT_BIN dump badging release_apk/*.apk | grep -E "package: name=|application-label:"
           fi
+          echo "=========================================================="
 
       - name: 上传打包好的 APK 产物
         uses: actions/upload-artifact@v4
