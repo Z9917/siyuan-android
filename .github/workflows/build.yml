@@ -1,3 +1,8 @@
+.github/workflows/build.yml
+```[cite: 1]
+点击右上角 **铅笔图标（Edit this file）**[cite: 1]，**Ctrl + A 全选清空**，完整粘贴以下修正后的构建脚本[cite: 3]：
+
+```yaml
 name: Build JinCheng Note APK
 
 on:
@@ -48,7 +53,7 @@ jobs:
           fi
           cd -
 
-      - name: 彻底同步应用包名(note.zjc.kim)、名称与快捷方式
+      - name: 强制修改应用名称为「金成笔记」并清除 testOnly
         run: |
           echo "1. 替换所有 values 语言包中的名称为「金成笔记」..."
           find app/src/main/res/ -name "strings.xml" -exec sed -i -E 's/<string name="app_name">.*<\/string>/<string name="app_name">金成笔记<\/string>/g' {} +
@@ -58,7 +63,11 @@ jobs:
           sed -i -E 's/applicationId\s*=?\s*"org.b3log.siyuan"/applicationId "note.zjc.kim"/g' app/build.gradle || true
           sed -i -E 's/applicationId\s*=?\s*"\$\{applicationId\}"/applicationId "note.zjc.kim"/g' app/build.gradle || true
 
-          echo "3. 精准同步 shortcuts.xml 中的目标包名(保留类名)..."
+          echo "3. 清单直接写死「金成笔记」并显式解除 testOnly..."
+          sed -i 's/android:label="@string\/app_name"/android:label="金成笔记"/g' app/src/main/AndroidManifest.xml || true
+          sed -i 's/<application/<application android:testOnly="false"/g' app/src/main/AndroidManifest.xml || true
+
+          echo "4. 同步 shortcuts.xml 快捷方式目标包名..."
           find app/src/main/res/ -name "shortcuts*.xml" -exec sed -i 's/targetPackage="[^"]*"/targetPackage="note.zjc.kim"/g' {} + || true
 
       - name: 写入应用版本号到根目录 build.gradle
@@ -156,8 +165,8 @@ jobs:
       - name: 赋予 Gradle 执行权限
         run: chmod +x gradlew
 
-      - name: 执行正式版打包任务 (正式 Release)
-        run: ./gradlew assembleCnRelease -Pandroid.injected.build.abi=arm64-v8a -x lint -x lintVitalCnRelease --parallel --stacktrace
+      - name: 执行正式版极速打包 (移除 testOnly 触发参数)
+        run: ./gradlew assembleCnRelease -x lint -x lintVitalCnRelease --parallel --stacktrace
 
       - name: 筛选并重命名正式 APK 产物
         run: |
