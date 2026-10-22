@@ -4,53 +4,34 @@
 
     <!-- 拥有完全的网络访问权限 -->
     <uses-permission android:name="android.permission.INTERNET" />
-
     <!-- 运行前台服务 -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-
     <!-- Keep CPU alive for background kernel service -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
-
     <!-- Keep Wi-Fi alive for background kernel service -->
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
-
     <!-- 获取用于局域网设备发现的当前网络信息 -->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-
     <!-- 接收局域网设备发现所需的组播数据 -->
     <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
+    <!-- 闪念速记悬浮窗必备权限 -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
 
-    <!--
-        Fix the problem that notifications cannot be allowed on Android 13
-        https://github.com/siyuan-note/siyuan/issues/7960
-        https://developer.android.google.cn/guide/topics/ui/notifiers/notification-permission?hl=zh-cn
-    -->
     <uses-permission
         android:name="android.permission.POST_NOTIFICATIONS"
         android:minSdkVersion="33" />
-
-    <!-- Foreground KeepLiveService Crash on Android 14 https://github.com/siyuan-note/siyuan/issues/9212 -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
 
-    <!-- 支持拍照 Support taking photos for inserting on Android https://github.com/siyuan-note/siyuan/issues/10479 -->
     <uses-feature
         android:name="android.hardware.camera"
         android:required="false" />
-
-    <!-- 拍摄照片和视频 -->
     <uses-permission android:name="android.permission.CAMERA" />
-
-    <!-- 支持录音 -->
     <uses-feature
         android:name="android.hardware.microphone"
         android:required="false" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
-
-    <!-- 添加桌面快捷方式 -->
     <uses-permission android:name="com.android.launcher.permission.INSTALL_SHORTCUT" />
-
-    <!-- 预约通知 -->
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
 
     <application
@@ -90,11 +71,8 @@
             android:theme="@style/Theme.SiYuan.Transparent">
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
-
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-
-                <!-- Android 会在未声明 host 时忽略 path，因此统一接收 siyuan: 链接并在代码中精确分派。 -->
                 <data android:scheme="siyuan" />
             </intent-filter>
         </activity>
@@ -105,16 +83,7 @@
             android:configChanges="keyboard|keyboardHidden|screenLayout|uiMode|orientation|screenSize|smallestScreenSize"
             android:hardwareAccelerated="true"
             android:theme="@style/Theme.SiYuan"
-            android:windowSoftInputMode="adjustResize">
-            <!--
-                android:windowSoftInputMode="adjustResize"
-                是为了解决软键盘遮挡 https://github.com/siyuan-note/siyuan-android/pull/7
-
-                不要添加 android:launchMode="singleInstance" 否则无法从相册中选择上传
-                Supports inserting pictures from photo gallery on the Android
-                https://github.com/siyuan-note/siyuan/issues/9455
-            -->
-        </activity>
+            android:windowSoftInputMode="adjustResize" />
 
         <activity
             android:name=".ShortcutActivity"
@@ -126,6 +95,7 @@
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="shorthand" />
             </intent-filter>
 
@@ -134,7 +104,6 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="text/plain" />
             </intent-filter>
-
             <intent-filter android:label="@string/shortcut_shorthand">
                 <action android:name="android.intent.action.SEND" />
                 <category android:name="android.intent.category.DEFAULT" />
@@ -145,7 +114,6 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="image/*" />
             </intent-filter>
-
             <intent-filter android:label="@string/shortcut_shorthand">
                 <action android:name="android.intent.action.SEND" />
                 <category android:name="android.intent.category.DEFAULT" />
@@ -156,7 +124,6 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="video/*" />
             </intent-filter>
-
             <intent-filter android:label="@string/shortcut_shorthand">
                 <action android:name="android.intent.action.SEND" />
                 <category android:name="android.intent.category.DEFAULT" />
@@ -167,7 +134,6 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="audio/*" />
             </intent-filter>
-
             <intent-filter android:label="@string/shortcut_shorthand">
                 <action android:name="android.intent.action.SEND" />
                 <category android:name="android.intent.category.DEFAULT" />
@@ -178,7 +144,6 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="application/*" />
             </intent-filter>
-
         </activity>
 
         <service
@@ -198,13 +163,8 @@
                 android:value="hosting" />
         </service>
 
-        <!-- 监听系统广播以实现预约通知 -->
         <receiver android:name=".NotificationReceiver" />
 
-        <!--
-            Support opening assets through other apps on the Android
-            https://github.com/siyuan-note/siyuan/issues/10657
-        -->
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="@string/app_package_name"
@@ -214,11 +174,9 @@
                 android:resource="@xml/provider_paths" />
         </provider>
 
-        <!-- 多渠道打包配置 -->
         <meta-data
             android:name="CHANNEL"
             android:value="${CHANNEL}" />
-
     </application>
 
 </manifest>
