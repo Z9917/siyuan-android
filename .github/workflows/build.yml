@@ -27,7 +27,7 @@ jobs:
       - name: 移除阿里云镜像源（强制海外服务器直连官方 Maven 源加速）
         run: |
           sed -i '/maven\.aliyun\.com/d' build.gradle || true
-          echo "强制直连官方源就绪！"
+          echo "直连官方源就绪！"
 
       - name: 配置 JDK 17
         uses: actions/setup-java@v4
@@ -48,9 +48,9 @@ jobs:
           fi
           cd -
 
-      - name: 修改应用名称为「金成笔记」
+      - name: 标准修改应用名称为「金成笔记」
         run: |
-          echo "替换所有语言包中的 app_name 为「金成笔记」..."
+          echo "通过资源文件替换 app_name，不触碰 Manifest 语法..."
           find app/src/main/res/ -name "strings.xml" -exec sed -i -E 's/<string name="app_name">.*<\/string>/<string name="app_name">金成笔记<\/string>/g' {} +
 
       - name: 写入应用版本号到根目录 build.gradle
@@ -59,13 +59,13 @@ jobs:
           VER_NAME="${RAW_NAME#v}"
           VER_CODE="${{ github.event.inputs.app_version_code }}"
 
-          echo "设置金成笔记展示版本号: $VER_NAME"
-          echo "设置金成笔记内部 VersionCode: $VER_CODE"
+          echo "设置展示版本号: $VER_NAME"
+          echo "设置内部 VersionCode: $VER_CODE"
 
           sed -i "s/siyuanVersionName = .*/siyuanVersionName = \"$VER_NAME\"/g" ./build.gradle
           sed -i "s/siyuanVersionCode = .*/siyuanVersionCode = $VER_CODE/g" ./build.gradle
 
-      - name: 构建国内版 kernel.aar (依据官方版本下载并提取 arm64-v8a)
+      - name: 构建国内版 kernel.aar (提取 arm64-v8a)
         run: |
           RAW_INPUT="${{ github.event.inputs.siyuan_version }}"
           PURE_VER="${RAW_INPUT#v}"
@@ -100,10 +100,10 @@ jobs:
             echo "3. 打包 classes.jar..."
             jar cvf aar_build/classes.jar -C aar_classes .
 
-            echo "4. 生成符合 AAR 规范的标准清单..."
+            echo "4. 生成标准 AAR 清单..."
             echo '<?xml version="1.0" encoding="utf-8"?><manifest xmlns:android="http://schemas.android.com/apk/res/android" package="org.b3log.siyuan.kernel"></manifest>' > aar_build/AndroidManifest.xml
 
-            echo "5. 封装为纯 arm64-v8a 的 kernel.aar..."
+            echo "5. 封装 kernel.aar..."
             mkdir -p app/libs
             cd aar_build
             zip -r ../app/libs/kernel.aar AndroidManifest.xml classes.jar jni
@@ -127,7 +127,7 @@ jobs:
           -ignorewarnings
           EOF
 
-      - name: 现场生成标准 Android 官方格式签名证书并双目录存放
+      - name: 生成签名证书并在根目录与 app 目录双备份
         run: |
           keytool -genkeypair -v \
             -keystore "zjc_note.jks" \
@@ -148,7 +148,7 @@ jobs:
       - name: 赋予 Gradle 执行权限
         run: chmod +x gradlew
 
-      - name: 执行正式版打包任务 (正式 Release，绝无 testOnly 污染)
+      - name: 执行正式版极速打包 (免 clean + 跳过无用 Lint)
         run: ./gradlew assembleCnRelease -x lint -x lintVitalCnRelease --parallel --stacktrace
 
       - name: 筛选并重命名正式 APK 产物
