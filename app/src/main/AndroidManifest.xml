@@ -116,16 +116,17 @@
             -->
         </activity>
 
-        <activity
-            android:name=".ShortcutActivity"
+<activity
+            android:name="org.b3log.siyuan.ShortcutActivity"
+            android:label="闪念速记"
             android:exported="true"
             android:launchMode="singleTask"
-            android:taskAffinity="org.b3log.siyuan.shorthand"
             android:theme="@style/Theme.AppCompat.DayNight.NoActionBar"
             android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="shorthand" />
             </intent-filter>
 
@@ -134,6 +135,7 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="text/plain" />
             </intent-filter>
+        </activity>
 
             <intent-filter android:label="@string/shortcut_shorthand">
                 <action android:name="android.intent.action.SEND" />
