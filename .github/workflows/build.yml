@@ -24,7 +24,7 @@ jobs:
       - name: 检出源码
         uses: actions/checkout@v4
 
-      - name: 移除阿里云镜像源（强制海外服务器直连官方 Maven 源）
+      - name: 移除阿里云镜像源（强制海外服务器直连官方 Maven 源加速）
         run: |
           sed -i '/maven\.aliyun\.com/d' build.gradle || true
           echo "强制直连官方源就绪！"
@@ -48,12 +48,10 @@ jobs:
           fi
           cd -
 
-      - name: 强制修改应用名称为「金成笔记」
+      - name: 修改应用名称为「金成笔记」
         run: |
-          echo "替换所有 values 语言包中的名称为「金成笔记」..."
+          echo "替换所有语言包中的 app_name 为「金成笔记」..."
           find app/src/main/res/ -name "strings.xml" -exec sed -i -E 's/<string name="app_name">.*<\/string>/<string name="app_name">金成笔记<\/string>/g' {} +
-          sed -i 's/android:label="@string\/app_name"/android:label="金成笔记"/g' app/src/main/AndroidManifest.xml || true
-          sed -i 's/<application/<application android:testOnly="false"/g' app/src/main/AndroidManifest.xml || true
 
       - name: 写入应用版本号到根目录 build.gradle
         run: |
@@ -129,7 +127,7 @@ jobs:
           -ignorewarnings
           EOF
 
-      - name: 生成标准 Android 官方格式签名证书
+      - name: 现场生成标准 Android 官方格式签名证书并双目录存放
         run: |
           keytool -genkeypair -v \
             -keystore "zjc_note.jks" \
@@ -150,7 +148,7 @@ jobs:
       - name: 赋予 Gradle 执行权限
         run: chmod +x gradlew
 
-      - name: 执行正式版打包任务 (极速 Release)
+      - name: 执行正式版打包任务 (正式 Release，绝无 testOnly 污染)
         run: ./gradlew assembleCnRelease -x lint -x lintVitalCnRelease --parallel --stacktrace
 
       - name: 筛选并重命名正式 APK 产物
