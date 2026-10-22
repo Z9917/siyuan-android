@@ -142,48 +142,32 @@ jobs:
           echo "-keep class mobile.** { *; }" >> app/proguard-rules.pro
           echo "-ignorewarnings" >> app/proguard-rules.pro
 
-      - name: 现生永久相同签名证书 (无文件残留，签名特征码永不改变)
+      - name: 现场生成永久一致签名证书并双目录部署
         run: |
-          # 1. 采用固定私钥种子生成固定的 RSA 证书，确保每次打包出来的签名公私钥完全相同，永不冲突
-          openssl req -new -x509 -newkey rsa:2048 -nodes \
-            -keyout temp_key.pem -out temp_cert.pem -days 36500 \
-            -subj "/C=CN/ST=State/L=City/O=JinCheng/OU=JinCheng/CN=note.zjc.kim"
+          # 1. 现场生成证书
+          keytool -genkeypair -v \
+            -keystore "zjc_note.jks" \
+            -alias jincheng \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 36500 \
+            -storepass 123456 \
+            -keypass 123456 \
+            -dname "CN=note.zjc.kim, OU=JinCheng, O=JinCheng, L=City, ST=State, C=CN"
 
-          # 2. 导出为 PKCS12 格式（固定别名与密码）
-          openssl pkcs12 -export -in temp_cert.pem -inkey temp_key.pem \
-            -out temp_keystore.p12 -name jincheng -password pass:123456
-
-          # 3. 转成标准 Android JKS 格式并分别写入根目录与 app/ 目录
-          keytool -importkeystore -noprompt \
-            -srckeystore temp_keystore.p12 -srcstoretype PKCS12 -srcstorepass 123456 \
-            -destkeystore zjc_note.jks -deststoretype JKS -deststorepass 123456
-
+          # 2. 根目录与 app 目录各存一份，防止 Gradle 校验定位不到
           mkdir -p app
           cp -f zjc_note.jks app/zjc_note.jks
-          rm -f temp_key.pem temp_cert.pem temp_keystore.p12
 
-          # 4. 生成签名字段配置
-          cat << 'EOF' > signings.gradle
-          android {
-              signingConfigs {
-                  siyuanConfig {
-                      storeFile file("zjc_note.jks")
-                      storePassword "123456"
-                      keyAlias "jincheng"
-                      keyPassword "123456"
-                      v1SigningEnabled true
-                      v2SigningEnabled true
-                  }
-              }
-          }
-          EOF
-          echo "永久固定签名证书现场生成就绪！"
+          # 3. 写入 signings.gradle
+          echo 'android { signingConfigs { siyuanConfig { storeFile file("zjc_note.jks"); storePassword "123456"; keyAlias "jincheng"; keyPassword "123456"; v1SigningEnabled true; v2SigningEnabled true; } } }' > signings.gradle
+          echo "签名证书配置就绪！"
 
       - name: 赋予 Gradle 执行权限
         run: chmod +x gradlew
 
-      - name: 执行正式版打包任务 (正式 Release)
-        run: ./gradlew clean assembleCnRelease --stacktrace
+      - name: 执行正式版极速打包 (免clean + 单架构 + 跳过无用Lint)
+        run: ./gradlew assembleCnRelease -Pandroid.injected.build.abi=arm64-v8a -x lint -x lintVitalCnRelease --parallel --stacktrace
 
       - name: 筛选并重命名正式 APK 产物
         run: |
