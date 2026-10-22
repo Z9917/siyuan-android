@@ -1,8 +1,3 @@
-.github/workflows/build.yml
-```[cite: 1]
-点击右上角 **铅笔图标（Edit this file）**[cite: 1]，**Ctrl + A 全选清空**，完整粘贴以下修正后的构建脚本[cite: 3]：
-
-```yaml
 name: Build JinCheng Note APK
 
 on:
