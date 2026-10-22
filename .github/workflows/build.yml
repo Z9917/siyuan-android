@@ -48,21 +48,22 @@ jobs:
           fi
           cd -
 
-      - name: 强制修改应用名称为「金成笔记」并清除 testOnly
+      - name: 精准配置包名、应用名与命名空间(防闪退核心)
         run: |
           echo "1. 替换所有 values 语言包中的名称为「金成笔记」..."
           find app/src/main/res/ -name "strings.xml" -exec sed -i -E 's/<string name="app_name">.*<\/string>/<string name="app_name">金成笔记<\/string>/g' {} +
           find app/src/main/res/ -name "strings.xml" -exec sed -i -E 's/<string name="app_package_name">.*<\/string>/<string name="app_package_name">note.zjc.kim<\/string>/g' {} +
 
-          echo "2. 修改 app/build.gradle 中的 applicationId..."
+          echo "2. 修改 app/build.gradle：保持代码命名空间不变，仅替换安装 applicationId..."
           sed -i -E 's/applicationId\s*=?\s*"org.b3log.siyuan"/applicationId "note.zjc.kim"/g' app/build.gradle || true
           sed -i -E 's/applicationId\s*=?\s*"\$\{applicationId\}"/applicationId "note.zjc.kim"/g' app/build.gradle || true
 
-          echo "3. 清单直接写死「金成笔记」并显式解除 testOnly..."
-          sed -i 's/android:label="@string\/app_name"/android:label="金成笔记"/g' app/src/main/AndroidManifest.xml || true
-          sed -i 's/<application/<application android:testOnly="false"/g' app/src/main/AndroidManifest.xml || true
+          # 确保 namespace 永远锁定在 Java 代码原本的包路径
+          if ! grep -q 'namespace "org.b3log.siyuan"' app/build.gradle; then
+            sed -i '/defaultConfig {/i \    namespace "org.b3log.siyuan"' app/build.gradle || true
+          fi
 
-          echo "4. 同步 shortcuts.xml 快捷方式目标包名..."
+          echo "3. 同步 shortcuts.xml 快捷方式目标包名..."
           find app/src/main/res/ -name "shortcuts*.xml" -exec sed -i 's/targetPackage="[^"]*"/targetPackage="note.zjc.kim"/g' {} + || true
 
       - name: 写入应用版本号到根目录 build.gradle
@@ -139,7 +140,7 @@ jobs:
           -ignorewarnings
           EOF
 
-      - name: 生成标准 Android 官方格式签名证书 (note.zjc.kim)
+      - name: 现场生成证书并双目录部署
         run: |
           keytool -genkeypair -v \
             -keystore "zjc_note.jks" \
@@ -155,12 +156,12 @@ jobs:
           cp -f zjc_note.jks app/zjc_note.jks
 
           echo 'android { signingConfigs { siyuanConfig { storeFile file("zjc_note.jks"); storePassword "123456"; keyAlias "jincheng"; keyPassword "123456"; v1SigningEnabled true; v2SigningEnabled true; } } }' > signings.gradle
-          echo "签名证书配置就绪！"
+          echo "签名证书现场生成就绪！"
 
       - name: 赋予 Gradle 执行权限
         run: chmod +x gradlew
 
-      - name: 执行正式版极速打包 (移除 testOnly 触发参数)
+      - name: 执行正式版打包 (纯净 Release，杜绝 testOnly)
         run: ./gradlew assembleCnRelease -x lint -x lintVitalCnRelease --parallel --stacktrace
 
       - name: 筛选并重命名正式 APK 产物
