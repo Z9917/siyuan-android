@@ -17,39 +17,28 @@
     <!-- 悬浮窗权限（保障闪念速记正常弹出） -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
 
-    <!--
-    Fix the problem that notifications cannot be allowed on Android 13
-    https://github.com/siyuan-note/siyuan/issues/7960
-    https://developer.android.google.cn/guide/topics/ui/notifiers/notification-permission?hl=zh-cn
-    -->
     <uses-permission
         android:name="android.permission.POST_NOTIFICATIONS"
         android:minSdkVersion="33" />
-    <!-- Foreground KeepLiveService Crash on Android 14 https://github.com/siyuan-note/siyuan/issues/9212 -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
 
-    <!-- 支持拍照 Support taking photos for inserting on Android https://github.com/siyuan-note/siyuan/issues/10479 -->
     <uses-feature
         android:name="android.hardware.camera"
         android:required="false" />
-    <!-- 拍摄照片和视频 -->
     <uses-permission android:name="android.permission.CAMERA" />
-    <!-- 支持录音 -->
     <uses-feature
         android:name="android.hardware.microphone"
         android:required="false" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
-    <!-- 添加桌面快捷方式 -->
     <uses-permission android:name="com.android.launcher.permission.INSTALL_SHORTCUT" />
-    <!-- 预约通知 -->
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
 
     <application
-        android:name=".App"
+        android:name="org.b3log.siyuan.App"
         android:enableOnBackInvokedCallback="true"
         android:icon="@mipmap/ic_launcher"
-        android:label="@string/app_name"
+        android:label="金成笔记"
         android:localeConfig="@xml/locales_config"
         android:networkSecurityConfig="@xml/network_security_config"
         android:supportsRtl="true"
@@ -58,7 +47,7 @@
         tools:targetApi="tiramisu">
 
         <activity
-            android:name=".BootActivity"
+            android:name="org.b3log.siyuan.BootActivity"
             android:autoRemoveFromRecents="true"
             android:configChanges="orientation|screenSize"
             android:exported="true"
@@ -75,7 +64,7 @@
         </activity>
 
         <activity
-            android:name=".MainActivity"
+            android:name="org.b3log.siyuan.MainActivity"
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden"
             android:exported="false"
             android:hardwareAccelerated="true"
@@ -83,10 +72,10 @@
             android:theme="@style/Theme.SiYuan"
             android:windowSoftInputMode="adjustResize" />
 
-        <!-- 闪念速记：全类名绑定，保证换包名后系统依然能正确实例化该类 -->
         <activity
             android:name="org.b3log.siyuan.ShortcutActivity"
             android:exported="true"
+            android:label="@string/shortcut_shorthand"
             android:launchMode="singleTask"
             android:taskAffinity="note.zjc.kim.shorthand"
             android:theme="@style/Theme.AppCompat.DayNight.NoActionBar"
@@ -106,13 +95,13 @@
         </activity>
 
         <service
-            android:name=".KeepLiveService"
+            android:name="org.b3log.siyuan.KeepLiveService"
             android:enabled="true"
             android:exported="false"
             android:foregroundServiceType="specialUse" />
 
         <service
-            android:name=".KernelService"
+            android:name="org.b3log.siyuan.KernelService"
             android:enabled="true"
             android:exported="false" />
     </application>
