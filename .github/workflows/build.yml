@@ -195,7 +195,3 @@ jobs:
         with:
           name: JinCheng-Software-${{ github.event.inputs.app_version_name }}
           path: release_apk/*.apk
-1. 提交上述修改后，在 GitHub 的 **Actions** 页面重新运行打包[cite: 1]；
-2. 构建到最后一步 **“筛选并验证最终 APK 包名”** 时，点开日志，就能直接看到输出：
-   ```text
-   package: name='note.zjc.kim' versionCode='30809' versionName='3.8.9'
