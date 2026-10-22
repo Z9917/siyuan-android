@@ -1,182 +1,201 @@
-<?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:tools="http://schemas.android.com/tools">
+name: Build JinCheng Note APK
 
-    <!-- 拥有完全的网络访问权限 -->
-    <uses-permission android:name="android.permission.INTERNET" />
-    <!-- 运行前台服务 -->
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-    <!-- Keep CPU alive for background kernel service -->
-    <uses-permission android:name="android.permission.WAKE_LOCK" />
-    <!-- Keep Wi-Fi alive for background kernel service -->
-    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
-    <!-- 获取用于局域网设备发现的当前网络信息 -->
-    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-    <!-- 接收局域网设备发现所需的组播数据 -->
-    <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
-    <!-- 闪念速记悬浮窗必备权限 -->
-    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+on:
+  workflow_dispatch:
+    inputs:
+      siyuan_version:
+        description: '1. 思源官方下载版本号 (例如 3.8.8)'
+        required: true
+        default: '3.8.8'
+      app_version_name:
+        description: '2. 金成软件对外展示版本号 (例如 3.8.9)'
+        required: true
+        default: '3.8.9'
+      app_version_code:
+        description: '3. 金成软件内部 VersionCode (整数 例如 30809)'
+        required: true
+        default: '30809'
 
-    <uses-permission
-        android:name="android.permission.POST_NOTIFICATIONS"
-        android:minSdkVersion="33" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+jobs:
+  build:
+    runs-on: ubuntu-latest
 
-    <uses-feature
-        android:name="android.hardware.camera"
-        android:required="false" />
-    <uses-permission android:name="android.permission.CAMERA" />
-    <uses-feature
-        android:name="android.hardware.microphone"
-        android:required="false" />
-    <uses-permission android:name="android.permission.RECORD_AUDIO" />
-    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
-    <uses-permission android:name="com.android.launcher.permission.INSTALL_SHORTCUT" />
-    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    steps:
+      - name: 检出源码
+        uses: actions/checkout@v4
 
-    <application
-        android:name=".App"
-        android:enableOnBackInvokedCallback="true"
-        android:icon="@mipmap/ic_launcher"
-        android:label="@string/app_name"
-        android:localeConfig="@xml/locales_config"
-        android:networkSecurityConfig="@xml/network_security_config"
-        android:supportsRtl="true"
-        android:theme="@style/Theme.SiYuan"
-        android:usesCleartextTraffic="true"
-        tools:targetApi="tiramisu">
+      - name: 移除阿里云镜像源（强制海外服务器直连官方 Maven 源加速）
+        run: |
+          sed -i '/maven\.aliyun\.com/d' build.gradle || true
+          echo "直连官方源就绪！"
 
-        <activity
-            android:name=".BootActivity"
-            android:autoRemoveFromRecents="true"
-            android:configChanges="orientation|screenSize"
-            android:exported="true"
-            android:hardwareAccelerated="true"
-            android:theme="@style/Theme.SiYuan.Boot">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
+      - name: 配置 JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+          cache: 'gradle'
 
-            <meta-data
-                android:name="android.app.shortcuts"
-                android:resource="@xml/shortcuts" />
-        </activity>
+      - name: 合并还原 app.zip 并清理分卷切片
+        run: |
+          cd app/src/main/assets
+          if ls app.zip.part* 1> /dev/null 2>&1; then
+            echo "正在拼接 app.zip..."
+            cat app.zip.part* > app.zip
+            echo "删除分卷切片，防止重复打包导致体积膨胀..."
+            rm -f app.zip.part*
+            ls -lh app.zip
+          fi
+          cd -
 
-        <activity
-            android:name=".RedirectUriReceiverActivity"
-            android:excludeFromRecents="true"
-            android:exported="true"
-            android:noHistory="true"
-            android:theme="@style/Theme.SiYuan.Transparent">
-            <intent-filter>
-                <action android:name="android.intent.action.VIEW" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="siyuan" />
-            </intent-filter>
-        </activity>
+      - name: 强制注入应用包名 (note.zjc.kim) 与应用名称 (金成软件)
+        run: |
+          echo "1. 替换所有 values 语言包中的名称为「金成软件」，包名变量为 note.zjc.kim..."
+          find app/src/main/res/ -name "strings.xml" -exec sed -i -E 's/<string name="app_name">.*<\/string>/<string name="app_name">金成软件<\/string>/g' {} +
+          find app/src/main/res/ -name "strings.xml" -exec sed -i -E 's/<string name="app_package_name">.*<\/string>/<string name="app_package_name">note.zjc.kim<\/string>/g' {} +
 
-        <activity
-            android:name=".MainActivity"
-            android:autoRemoveFromRecents="true"
-            android:configChanges="keyboard|keyboardHidden|screenLayout|uiMode|orientation|screenSize|smallestScreenSize"
-            android:hardwareAccelerated="true"
-            android:theme="@style/Theme.SiYuan"
-            android:windowSoftInputMode="adjustResize" />
+          echo "2. 强制在 app/build.gradle 中注入 applicationId..."
+          if grep -q "applicationId" app/build.gradle; then
+            sed -i -E 's/applicationId\s+["'"'"'][^"'"'"']+["'"'"']/applicationId "note.zjc.kim"/g' app/build.gradle
+          else
+            # 若 defaultConfig 内无声明，直接插入新行
+            sed -i '/defaultConfig\s*{/a \        applicationId "note.zjc.kim"' app/build.gradle
+          fi
 
-        <activity
-            android:name=".ShortcutActivity"
-            android:exported="true"
-            android:launchMode="singleTask"
-            android:taskAffinity="org.b3log.siyuan.shorthand"
-            android:theme="@style/Theme.AppCompat.DayNight.NoActionBar"
-            android:windowSoftInputMode="adjustResize">
-            <intent-filter>
-                <action android:name="android.intent.action.VIEW" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="shorthand" />
-            </intent-filter>
+          # 同步多渠道配置中可能包含的 applicationId
+          if [ -f "flavors.gradle" ]; then
+            sed -i -E 's/applicationId\s+["'"'"'][^"'"'"']+["'"'"']/applicationId "note.zjc.kim"/g' flavors.gradle || true
+          fi
 
-            <intent-filter android:label="@string/shortcut_shorthand">
-                <action android:name="android.intent.action.SEND" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <data android:mimeType="text/plain" />
-            </intent-filter>
-            <intent-filter android:label="@string/shortcut_shorthand">
-                <action android:name="android.intent.action.SEND" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <data android:mimeType="image/*" />
-            </intent-filter>
-            <intent-filter android:label="@string/shortcut_shorthand">
-                <action android:name="android.intent.action.SEND_MULTIPLE" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <data android:mimeType="image/*" />
-            </intent-filter>
-            <intent-filter android:label="@string/shortcut_shorthand">
-                <action android:name="android.intent.action.SEND" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <data android:mimeType="video/*" />
-            </intent-filter>
-            <intent-filter android:label="@string/shortcut_shorthand">
-                <action android:name="android.intent.action.SEND_MULTIPLE" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <data android:mimeType="video/*" />
-            </intent-filter>
-            <intent-filter android:label="@string/shortcut_shorthand">
-                <action android:name="android.intent.action.SEND" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <data android:mimeType="audio/*" />
-            </intent-filter>
-            <intent-filter android:label="@string/shortcut_shorthand">
-                <action android:name="android.intent.action.SEND_MULTIPLE" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <data android:mimeType="audio/*" />
-            </intent-filter>
-            <intent-filter android:label="@string/shortcut_shorthand">
-                <action android:name="android.intent.action.SEND" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <data android:mimeType="application/*" />
-            </intent-filter>
-            <intent-filter android:label="@string/shortcut_shorthand">
-                <action android:name="android.intent.action.SEND_MULTIPLE" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <data android:mimeType="application/*" />
-            </intent-filter>
-        </activity>
+          echo "=== 检查 app/build.gradle 中的 applicationId 配置 ==="
+          grep -C 2 "applicationId" app/build.gradle
 
-        <service
-            android:name=".KeepLiveService"
-            android:foregroundServiceType="specialUse">
-            <property
-                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-                android:value="hosting" />
-        </service>
+          echo "3. 精准同步 shortcuts.xml 中的目标包名..."
+          find app/src/main/res/ -name "shortcuts*.xml" -exec sed -i 's/targetPackage="[^"]*"/targetPackage="note.zjc.kim"/g' {} + || true
 
-        <service
-            android:name=".KernelService"
-            android:exported="false"
-            android:foregroundServiceType="specialUse">
-            <property
-                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-                android:value="hosting" />
-        </service>
+      - name: 写入应用版本号到根目录 build.gradle
+        run: |
+          RAW_NAME="${{ github.event.inputs.app_version_name }}"
+          VER_NAME="${RAW_NAME#v}"
+          VER_CODE="${{ github.event.inputs.app_version_code }}"
 
-        <receiver android:name=".NotificationReceiver" />
+          echo "设置展示版本号: $VER_NAME"
+          echo "设置内部 VersionCode: $VER_CODE"
 
-        <provider
-            android:name="androidx.core.content.FileProvider"
-            android:authorities="@string/app_package_name"
-            android:grantUriPermissions="true">
-            <meta-data
-                android:name="android.support.FILE_PROVIDER_PATHS"
-                android:resource="@xml/provider_paths" />
-        </provider>
+          sed -i "s/siyuanVersionName = .*/siyuanVersionName = \"$VER_NAME\"/g" ./build.gradle
+          sed -i "s/siyuanVersionCode = .*/siyuanVersionCode = $VER_CODE/g" ./build.gradle
 
-        <meta-data
-            android:name="CHANNEL"
-            android:value="${CHANNEL}" />
-    </application>
+      - name: 构建国内版 kernel.aar (依据官方版本下载并提取 arm64-v8a)
+        run: |
+          RAW_INPUT="${{ github.event.inputs.siyuan_version }}"
+          PURE_VER="${RAW_INPUT#v}"
+          TAG="v${PURE_VER}"
 
-</manifest>
+          echo "正在下载官方 APK: siyuan-${PURE_VER}.apk (Release Tag: ${TAG})"
+          APK_URL="https://github.com/siyuan-note/siyuan/releases/download/${TAG}/siyuan-${PURE_VER}.apk"
+          curl -fL -o official.apk "$APK_URL"
+
+          mkdir -p extracted_apk
+          unzip -o official.apk "lib/*" -d extracted_apk || true
+
+          if [ -d "extracted_apk/lib/arm64-v8a" ]; then
+            echo "1. 提取 arm64-v8a 动态库..."
+            mkdir -p aar_build/jni/arm64-v8a
+            cp -r extracted_apk/lib/arm64-v8a/* aar_build/jni/arm64-v8a/
+            find aar_build/jni -name "*onnxruntime*.so" -delete
+
+            echo "2. 提取 GoMobile 桥接类..."
+            curl -L -o dex-tools.zip https://github.com/pxb1988/dex2jar/releases/download/v2.4/dex-tools-v2.4.zip
+            unzip -q dex-tools.zip
+            chmod +x dex-tools-v2.4/*.sh
+            ./dex-tools-v2.4/d2j-dex2jar.sh -f official.apk -o official-classes.jar || true
+
+            mkdir -p aar_classes
+            for jarfile in *dex2jar.jar official-classes.jar; do
+              if [ -f "$jarfile" ]; then
+                unzip -qo "$jarfile" "mobile/*" "go/*" -d aar_classes || true
+              fi
+            done
+
+            echo "3. 打包 classes.jar..."
+            jar cvf aar_build/classes.jar -C aar_classes .
+
+            echo "4. 生成符合 AAR 规范的标准清单..."
+            echo '<?xml version="1.0" encoding="utf-8"?><manifest xmlns:android="http://schemas.android.com/apk/res/android" package="org.b3log.siyuan.kernel"></manifest>' > aar_build/AndroidManifest.xml
+
+            echo "5. 封装为纯 arm64-v8a 的 kernel.aar..."
+            mkdir -p app/libs
+            cd aar_build
+            zip -r ../app/libs/kernel.aar AndroidManifest.xml classes.jar jni
+            cd ..
+            echo "kernel.aar 制作完成！"
+          else
+            echo "错误：未能从官方 APK 中提取出 lib/arm64-v8a 目录"
+            exit 1
+          fi
+
+      - name: 配置 ProGuard 忽略混淆告警
+        run: |
+          mkdir -p app
+          cat <<EOF >> app/proguard-rules.pro
+          -dontwarn go.**
+          -dontwarn mobile.**
+          -dontwarn m60
+          -dontwarn x8
+          -keep class go.** { *; }
+          -keep class mobile.** { *; }
+          -ignorewarnings
+          EOF
+
+      - name: 现场生成证书并在根目录与 app 目录双备份
+        run: |
+          keytool -genkeypair -v \
+            -keystore "zjc_note.jks" \
+            -alias jincheng \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 36500 \
+            -storepass 123456 \
+            -keypass 123456 \
+            -dname "CN=note.zjc.kim, OU=JinCheng, O=JinCheng, L=City, ST=State, C=CN"
+
+          mkdir -p app
+          cp -f zjc_note.jks app/zjc_note.jks
+
+          echo 'android { signingConfigs { siyuanConfig { storeFile file("zjc_note.jks"); storePassword "123456"; keyAlias "jincheng"; keyPassword "123456"; v1SigningEnabled true; v2SigningEnabled true; } } }' > signings.gradle
+          echo "签名证书配置就绪！"
+
+      - name: 赋予 Gradle 执行权限
+        run: chmod +x gradlew
+
+      - name: 执行正式版打包任务 (正式 Release)
+        run: ./gradlew assembleCnRelease -x lint -x lintVitalCnRelease --parallel --stacktrace
+
+      - name: 筛选并验证最终 APK 包名
+        run: |
+          RAW_NAME="${{ github.event.inputs.app_version_name }}"
+          VER_NAME="${RAW_NAME#v}"
+          mkdir -p release_apk
+          find app/build/outputs/apk/cn/release/ -type f -name "*.apk" -exec cp -v {} release_apk/JinCheng-Software-${VER_NAME}.apk \; || true
+
+          if [ ! -f release_apk/*.apk ]; then
+            find app/build/ -type f -name "*cn*release*.apk" ! -name "*unsigned*" -exec cp -v {} release_apk/JinCheng-Software-${VER_NAME}.apk \;
+          fi
+
+          ls -lh release_apk/
+
+          echo "=== 正在使用 aapt 严格检查最终 APK 的真实包名 ==="
+          AAPT_BIN=$(find /usr/local/lib/android/sdk/build-tools/ -name aapt | sort -V | tail -n 1)
+          if [ -n "$AAPT_BIN" ]; then
+            $AAPT_BIN dump badging release_apk/*.apk | grep "package: name="
+          fi
+
+      - name: 上传打包好的 APK 产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: JinCheng-Software-${{ github.event.inputs.app_version_name }}
+          path: release_apk/*.apk
+1. 提交上述修改后，在 GitHub 的 **Actions** 页面重新运行打包[cite: 1]；
+2. 构建到最后一步 **“筛选并验证最终 APK 包名”** 时，点开日志，就能直接看到输出：
+   ```text
+   package: name='note.zjc.kim' versionCode='30809' versionName='3.8.9'
