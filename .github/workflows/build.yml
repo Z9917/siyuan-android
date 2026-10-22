@@ -171,7 +171,3 @@ jobs:
         with:
           name: JinCheng-Note-${{ github.event.inputs.app_version_name }}
           path: release_apk/*.apk
-保存并提交后，到 **Actions** 重新打包[cite: 1]：
-1. 手机上彻底卸载闪退的包[cite: 1]；
-2. 安装新打出的包；
-3. 打开后将完全恢复到昨晚正常进入、流畅运行、名称叫「金成笔记」、Logo 正确且闪念速记正常使用的状态[cite: 1]。
