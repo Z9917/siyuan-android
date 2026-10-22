@@ -131,20 +131,80 @@ jobs:
           echo "-keep class mobile.** { *; }" >> app/proguard-rules.pro
           echo "-ignorewarnings" >> app/proguard-rules.pro
 
-      - name: 生成标准 Android 签名并配置
+      - name: 还原永久固定签名证书 (保证每次构建签名指纹100%一致，终身无缝覆盖安装)
         run: |
-          keytool -genkeypair -v \
-            -keystore "${GITHUB_WORKSPACE}/zjc.kim.jks" \
-            -alias zjc.kim \
-            -keyalg RSA \
-            -keysize 2048 \
-            -validity 36500 \
-            -storepass 123456 \
-            -keypass 123456 \
-            -dname "CN=zjc.kim, OU=JinCheng, O=JinCheng, L=City, ST=State, C=CN"
+          # 1. 还原固定的 zjc.kim.jks 证书文件，确保每次构建的私钥完全同一
+          cat << 'EOF' | base64 -d > zjc.kim.jks
+          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
+          EOF
 
-          echo 'android { signingConfigs { siyuanConfig { storeFile file("'${GITHUB_WORKSPACE}'/zjc.kim.jks"); storePassword "123456"; keyAlias "zjc.kim"; keyPassword "123456"; v1SigningEnabled true; v2SigningEnabled true; } } }' > signings.gradle
-          echo "证书与签名配置完成！"
+          # 2. 根目录与 app 模块各放置一份，杜绝 Gradle 相对路径定位报错
+          mkdir -p app
+          cp -f zjc.kim.jks app/zjc.kim.jks
+
+          # 3. 写入 signings.gradle，采用 rootProject.file 锁定
+          cat << 'EOF' > signings.gradle
+          android {
+              signingConfigs {
+                  siyuanConfig {
+                      storeFile rootProject.file("zjc.kim.jks")
+                      storePassword "123456"
+                      keyAlias "zjc.kim"
+                      keyPassword "123456"
+                      v1SigningEnabled true
+                      v2SigningEnabled true
+                  }
+              }
+          }
+          EOF
+          echo "永久固定签名证书还原配置就绪！"
 
       - name: 赋予 Gradle 执行权限
         run: chmod +x gradlew
