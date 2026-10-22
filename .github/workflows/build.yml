@@ -15,10 +15,6 @@ on:
         description: '3. 内部 VersionCode (整数 例如 30809)'
         required: true
         default: '30809'
-      app_display_name:
-        description: '4. 应用对外显示名称'
-        required: true
-        default: '金成软件'
 
 jobs:
   build:
@@ -27,11 +23,6 @@ jobs:
     steps:
       - name: 检出源码
         uses: actions/checkout@v4
-
-      - name: 移除阿里云镜像源（直连官方 Maven 源加速）
-        run: |
-          sed -i '/maven\.aliyun\.com/d' build.gradle || true
-          echo "直连官方源配置就绪！"
 
       - name: 配置 JDK 17
         uses: actions/setup-java@v4
@@ -52,32 +43,18 @@ jobs:
           fi
           cd -
 
-      - name: 彻底击穿替换 flavors.gradle、清单与多语言(锁定包名 note.zjc.kim)
+      - name: 配置包名 (note.zjc.kim) 与多语言应用名称
         run: |
-          APP_NAME="${{ github.event.inputs.app_display_name }}"
-          echo "设置应用名称为: $APP_NAME"
-          echo "设置应用包名为: note.zjc.kim"
-
-          echo "1. 彻底替换 flavors.gradle 中的渠道专属包名（核心根源修复）..."
-          find . -name "flavors.gradle" -exec sed -i -E 's/applicationId\s+["'"'"'][^"'"'"']+["'"'"']/applicationId "note.zjc.kim"/g' {} + || true
-
-          echo "2. 修改 app/build.gradle：在 defaultConfig 显式注入包名..."
-          if grep -q "applicationId" app/build.gradle; then
-            sed -i -E 's/applicationId\s+["'"'"'][^"'"'"']+["'"'"']/applicationId "note.zjc.kim"/g' app/build.gradle
-          else
-            sed -i '/defaultConfig\s*{/a \        applicationId "note.zjc.kim"' app/build.gradle
-          fi
-
-          echo "3. 替换全局所有 values 语言包中的应用名称与包名变量..."
-          find app/src/main/res/ -name "strings.xml" -exec sed -i -E "s/<string name=\"app_name\">.*<\/string>/<string name=\"app_name\">${APP_NAME}<\/string>/g" {} +
+          echo "1. 强制将所有语言包中的 app_name 替换为「金成软件」..."
+          find app/src/main/res/ -name "strings.xml" -exec sed -i -E 's/<string name="app_name">.*<\/string>/<string name="app_name">金成软件<\/string>/g' {} +
           find app/src/main/res/ -name "strings.xml" -exec sed -i -E 's/<string name="app_package_name">.*<\/string>/<string name="app_package_name">note.zjc.kim<\/string>/g' {} +
 
-          echo "4. 同步 shortcuts.xml 快捷方式目标包名..."
-          find app/src/main/res/ -name "shortcuts*.xml" -exec sed -i 's/targetPackage="[^"]*"/targetPackage="note.zjc.kim"/g' {} + || true
-          find app/src/main/res/ -name "shortcuts*.xml" -exec sed -i 's/org.b3log.siyuan/note.zjc.kim/g' {} + || true
+          echo "2. 修改 app/build.gradle 中的 applicationId..."
+          sed -i -E 's/applicationId\s*=?\s*"org.b3log.siyuan"/applicationId "note.zjc.kim"/g' app/build.gradle || true
+          sed -i -E 's/applicationId\s*=?\s*"\$\{applicationId\}"/applicationId "note.zjc.kim"/g' app/build.gradle || true
 
-          echo "=== 检查 flavors.gradle 替换后的包名配置 ==="
-          cat flavors.gradle | grep -C 2 "applicationId" || true
+          echo "3. 确保 shortcuts.xml 里的 targetPackage 对齐 note.zjc.kim..."
+          find app/src/main/res/ -name "shortcuts*.xml" -exec sed -i 's/targetPackage="org.b3log.siyuan"/targetPackage="note.zjc.kim"/g' {} + || true
 
       - name: 写入应用版本号到根目录 build.gradle
         run: |
@@ -85,13 +62,13 @@ jobs:
           VER_NAME="${RAW_NAME#v}"
           VER_CODE="${{ github.event.inputs.app_version_code }}"
 
-          echo "设置对外展示版本号: $VER_NAME"
+          echo "设置展示版本号: $VER_NAME"
           echo "设置内部 VersionCode: $VER_CODE"
 
           sed -i "s/siyuanVersionName = .*/siyuanVersionName = \"$VER_NAME\"/g" ./build.gradle
           sed -i "s/siyuanVersionCode = .*/siyuanVersionCode = $VER_CODE/g" ./build.gradle
 
-      - name: 构建国内版 kernel.aar (依据官方版本下载并提取 arm64-v8a)
+      - name: 构建国内版 kernel.aar (保证合法 package 声明与类库完整)
         run: |
           RAW_INPUT="${{ github.event.inputs.siyuan_version }}"
           PURE_VER="${RAW_INPUT#v}"
@@ -140,48 +117,44 @@ jobs:
             exit 1
           fi
 
-      - name: 配置 ProGuard 忽略混淆告警
+      - name: 配置 ProGuard 忽略 R8 混淆告警
         run: |
           mkdir -p app
-          cat <<EOF >> app/proguard-rules.pro
-          -dontwarn go.**
-          -dontwarn mobile.**
-          -dontwarn m60
-          -dontwarn x8
-          -keep class go.** { *; }
-          -keep class mobile.** { *; }
-          -ignorewarnings
-          EOF
+          echo "-dontwarn go.**" >> app/proguard-rules.pro
+          echo "-dontwarn mobile.**" >> app/proguard-rules.pro
+          echo "-dontwarn m60" >> app/proguard-rules.pro
+          echo "-dontwarn x8" >> app/proguard-rules.pro
+          echo "-keep class go.** { *; }" >> app/proguard-rules.pro
+          echo "-keep class mobile.** { *; }" >> app/proguard-rules.pro
+          echo "-ignorewarnings" >> app/proguard-rules.pro
 
-      - name: 现场生成标准 Android 官方格式签名证书并双目录存放
+      - name: 生成标准 Android 签名并配置
         run: |
           keytool -genkeypair -v \
-            -keystore "zjc_note.jks" \
-            -alias jincheng \
+            -keystore "${GITHUB_WORKSPACE}/zjc.kim.jks" \
+            -alias zjc.kim \
             -keyalg RSA \
             -keysize 2048 \
             -validity 36500 \
             -storepass 123456 \
             -keypass 123456 \
-            -dname "CN=note.zjc.kim, OU=JinCheng, O=JinCheng, L=City, ST=State, C=CN"
+            -dname "CN=zjc.kim, OU=JinCheng, O=JinCheng, L=City, ST=State, C=CN"
 
-          mkdir -p app
-          cp -f zjc_note.jks app/zjc_note.jks
-
-          echo 'android { signingConfigs { siyuanConfig { storeFile file("zjc_note.jks"); storePassword "123456"; keyAlias "jincheng"; keyPassword "123456"; v1SigningEnabled true; v2SigningEnabled true; } } }' > signings.gradle
-          echo "签名证书配置就绪！"
+          echo 'android { signingConfigs { siyuanConfig { storeFile file("'${GITHUB_WORKSPACE}'/zjc.kim.jks"); storePassword "123456"; keyAlias "zjc.kim"; keyPassword "123456"; v1SigningEnabled true; v2SigningEnabled true; } } }' > signings.gradle
+          echo "证书与签名配置完成！"
 
       - name: 赋予 Gradle 执行权限
         run: chmod +x gradlew
 
       - name: 执行正式版打包任务 (正式 Release)
-        run: ./gradlew assembleCnRelease -x lint -x lintVitalCnRelease --parallel --stacktrace
+        run: ./gradlew clean assembleCnRelease --stacktrace
 
-      - name: 筛选并现场打印检验 APK 真实包名与版本
+      - name: 筛选并验证最终的已签名 APK 产物
         run: |
           RAW_NAME="${{ github.event.inputs.app_version_name }}"
           VER_NAME="${RAW_NAME#v}"
           mkdir -p release_apk
+          echo "正在查找正式 release apk..."
           find app/build/outputs/apk/cn/release/ -type f -name "*.apk" -exec cp -v {} release_apk/JinCheng-App-${VER_NAME}.apk \; || true
 
           if [ ! -f release_apk/*.apk ]; then
@@ -189,13 +162,6 @@ jobs:
           fi
 
           ls -lh release_apk/
-
-          echo "==================== AAPT 包名严格核验 ===================="
-          AAPT_BIN=$(find /usr/local/lib/android/sdk/build-tools/ -name aapt | sort -V | tail -n 1)
-          if [ -n "$AAPT_BIN" ]; then
-            $AAPT_BIN dump badging release_apk/*.apk | grep -E "package: name=|application-label:"
-          fi
-          echo "=========================================================="
 
       - name: 上传打包好的 APK 产物
         uses: actions/upload-artifact@v4
