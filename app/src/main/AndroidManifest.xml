@@ -6,36 +6,47 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- 运行前台服务 -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-    <!-- 保持后台服务活跃 -->
+    <!-- Keep CPU alive for background kernel service -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <!-- Keep Wi-Fi alive for background kernel service -->
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <!-- 获取用于局域网设备发现的当前网络信息 -->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- 接收局域网设备发现所需的组播数据 -->
     <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
-    <!-- 闪念速记必备悬浮窗权限 -->
+    <!-- 悬浮窗权限（保障闪念速记正常弹出） -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
 
-    <!-- 通知权限 -->
+    <!--
+    Fix the problem that notifications cannot be allowed on Android 13
+    https://github.com/siyuan-note/siyuan/issues/7960
+    https://developer.android.google.cn/guide/topics/ui/notifiers/notification-permission?hl=zh-cn
+    -->
     <uses-permission
         android:name="android.permission.POST_NOTIFICATIONS"
         android:minSdkVersion="33" />
-    <!-- Android 14 前台保活必须权限 -->
+    <!-- Foreground KeepLiveService Crash on Android 14 https://github.com/siyuan-note/siyuan/issues/9212 -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
 
-    <!-- 硬件功能支持 -->
+    <!-- 支持拍照 Support taking photos for inserting on Android https://github.com/siyuan-note/siyuan/issues/10479 -->
     <uses-feature
         android:name="android.hardware.camera"
         android:required="false" />
+    <!-- 拍摄照片和视频 -->
     <uses-permission android:name="android.permission.CAMERA" />
+    <!-- 支持录音 -->
     <uses-feature
         android:name="android.hardware.microphone"
         android:required="false" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+    <!-- 添加桌面快捷方式 -->
     <uses-permission android:name="com.android.launcher.permission.INSTALL_SHORTCUT" />
+    <!-- 预约通知 -->
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
 
     <application
-        android:name="org.b3log.siyuan.App"
+        android:name=".App"
         android:testOnly="false"
         android:enableOnBackInvokedCallback="true"
         android:icon="@mipmap/ic_launcher"
@@ -47,9 +58,8 @@
         android:usesCleartextTraffic="true"
         tools:targetApi="tiramisu">
 
-        <!-- 主启动入口：写死全限定类名，无论外层包名如何改变均不会找不到类 -->
         <activity
-            android:name="org.b3log.siyuan.BootActivity"
+            android:name=".BootActivity"
             android:label="金成笔记"
             android:autoRemoveFromRecents="true"
             android:configChanges="orientation|screenSize"
@@ -67,7 +77,7 @@
         </activity>
 
         <activity
-            android:name="org.b3log.siyuan.MainActivity"
+            android:name=".MainActivity"
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden"
             android:exported="false"
             android:hardwareAccelerated="true"
@@ -75,12 +85,12 @@
             android:theme="@style/Theme.SiYuan"
             android:windowSoftInputMode="adjustResize" />
 
-        <!-- 闪念速记快捷入口 -->
+        <!-- 闪念速记 -->
         <activity
-            android:name="org.b3log.siyuan.ShortcutActivity"
-            android:label="@string/shortcut_shorthand"
+            android:name=".ShortcutActivity"
             android:exported="true"
             android:launchMode="singleTask"
+            android:taskAffinity="org.b3log.siyuan.shorthand"
             android:theme="@style/Theme.AppCompat.DayNight.NoActionBar"
             android:windowSoftInputMode="adjustResize">
             <intent-filter>
@@ -98,13 +108,13 @@
         </activity>
 
         <service
-            android:name="org.b3log.siyuan.KeepLiveService"
+            android:name=".KeepLiveService"
             android:enabled="true"
             android:exported="false"
             android:foregroundServiceType="specialUse" />
 
         <service
-            android:name="org.b3log.siyuan.KernelService"
+            android:name=".KernelService"
             android:enabled="true"
             android:exported="false" />
     </application>
