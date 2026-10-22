@@ -8,11 +8,11 @@ on:
         required: true
         default: '3.8.8'
       app_version_name:
-        description: '2. 金成笔记对外展示版本号 (例如 3.8.9)'
+        description: '2. 金成软件对外展示版本号 (例如 3.8.9)'
         required: true
         default: '3.8.9'
       app_version_code:
-        description: '3. 金成笔记内部 VersionCode (整数 例如 30809)'
+        description: '3. 金成软件内部 VersionCode (整数 例如 30809)'
         required: true
         default: '30809'
 
@@ -48,10 +48,18 @@ jobs:
           fi
           cd -
 
-      - name: 标准修改应用名称为「金成笔记」
+      - name: 配置应用名称(金成软件)与独立包名(note.zjc.kim)
         run: |
-          echo "通过资源文件替换 app_name，不触碰 Manifest 语法..."
-          find app/src/main/res/ -name "strings.xml" -exec sed -i -E 's/<string name="app_name">.*<\/string>/<string name="app_name">金成笔记<\/string>/g' {} +
+          echo "1. 替换所有 values 语言包中的名称为「金成软件」..."
+          find app/src/main/res/ -name "strings.xml" -exec sed -i -E 's/<string name="app_name">.*<\/string>/<string name="app_name">金成软件<\/string>/g' {} +
+          find app/src/main/res/ -name "strings.xml" -exec sed -i -E 's/<string name="app_package_name">.*<\/string>/<string name="app_package_name">note.zjc.kim<\/string>/g' {} +
+
+          echo "2. 修改 app/build.gradle 中的 applicationId 为 note.zjc.kim..."
+          sed -i -E 's/applicationId\s*=?\s*"org.b3log.siyuan"/applicationId "note.zjc.kim"/g' app/build.gradle || true
+          sed -i -E 's/applicationId\s*=?\s*"\$\{applicationId\}"/applicationId "note.zjc.kim"/g' app/build.gradle || true
+
+          echo "3. 精准同步 shortcuts.xml 中的目标包名..."
+          find app/src/main/res/ -name "shortcuts*.xml" -exec sed -i 's/targetPackage="[^"]*"/targetPackage="note.zjc.kim"/g' {} + || true
 
       - name: 写入应用版本号到根目录 build.gradle
         run: |
@@ -65,7 +73,7 @@ jobs:
           sed -i "s/siyuanVersionName = .*/siyuanVersionName = \"$VER_NAME\"/g" ./build.gradle
           sed -i "s/siyuanVersionCode = .*/siyuanVersionCode = $VER_CODE/g" ./build.gradle
 
-      - name: 构建国内版 kernel.aar (提取 arm64-v8a)
+      - name: 构建国内版 kernel.aar (依据官方版本下载并提取 arm64-v8a)
         run: |
           RAW_INPUT="${{ github.event.inputs.siyuan_version }}"
           PURE_VER="${RAW_INPUT#v}"
@@ -100,10 +108,10 @@ jobs:
             echo "3. 打包 classes.jar..."
             jar cvf aar_build/classes.jar -C aar_classes .
 
-            echo "4. 生成标准 AAR 清单..."
+            echo "4. 生成符合 AAR 规范的标准清单..."
             echo '<?xml version="1.0" encoding="utf-8"?><manifest xmlns:android="http://schemas.android.com/apk/res/android" package="org.b3log.siyuan.kernel"></manifest>' > aar_build/AndroidManifest.xml
 
-            echo "5. 封装 kernel.aar..."
+            echo "5. 封装为纯 arm64-v8a 的 kernel.aar..."
             mkdir -p app/libs
             cd aar_build
             zip -r ../app/libs/kernel.aar AndroidManifest.xml classes.jar jni
@@ -127,7 +135,7 @@ jobs:
           -ignorewarnings
           EOF
 
-      - name: 生成签名证书并在根目录与 app 目录双备份
+      - name: 现场生成证书并在根目录与 app 目录双备份
         run: |
           keytool -genkeypair -v \
             -keystore "zjc_note.jks" \
@@ -137,7 +145,7 @@ jobs:
             -validity 36500 \
             -storepass 123456 \
             -keypass 123456 \
-            -dname "CN=org.b3log.siyuan, OU=JinCheng, O=JinCheng, L=City, ST=State, C=CN"
+            -dname "CN=note.zjc.kim, OU=JinCheng, O=JinCheng, L=City, ST=State, C=CN"
 
           mkdir -p app
           cp -f zjc_note.jks app/zjc_note.jks
@@ -148,7 +156,7 @@ jobs:
       - name: 赋予 Gradle 执行权限
         run: chmod +x gradlew
 
-      - name: 执行正式版极速打包 (免 clean + 跳过无用 Lint)
+      - name: 执行正式版打包任务 (正式 Release，绝不产生 testOnly)
         run: ./gradlew assembleCnRelease -x lint -x lintVitalCnRelease --parallel --stacktrace
 
       - name: 筛选并重命名正式 APK 产物
@@ -156,10 +164,10 @@ jobs:
           RAW_NAME="${{ github.event.inputs.app_version_name }}"
           VER_NAME="${RAW_NAME#v}"
           mkdir -p release_apk
-          find app/build/outputs/apk/cn/release/ -type f -name "*.apk" -exec cp -v {} release_apk/JinCheng-Note-${VER_NAME}.apk \; || true
+          find app/build/outputs/apk/cn/release/ -type f -name "*.apk" -exec cp -v {} release_apk/JinCheng-Software-${VER_NAME}.apk \; || true
 
           if [ ! -f release_apk/*.apk ]; then
-            find app/build/ -type f -name "*cn*release*.apk" ! -name "*unsigned*" -exec cp -v {} release_apk/JinCheng-Note-${VER_NAME}.apk \;
+            find app/build/ -type f -name "*cn*release*.apk" ! -name "*unsigned*" -exec cp -v {} release_apk/JinCheng-Software-${VER_NAME}.apk \;
           fi
 
           ls -lh release_apk/
@@ -167,5 +175,5 @@ jobs:
       - name: 上传打包好的 APK 产物
         uses: actions/upload-artifact@v4
         with:
-          name: JinCheng-Note-${{ github.event.inputs.app_version_name }}
+          name: JinCheng-Software-${{ github.event.inputs.app_version_name }}
           path: release_apk/*.apk
